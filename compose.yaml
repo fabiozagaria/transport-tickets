@@ -1,0 +1,54 @@
+services:
+  api:
+    restart: unless-stopped
+    image: transport-tickets-api:local
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      DEMO_USERS_ENABLED: "true"
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-local-demo-change-me}
+      TICKET_STORAGE: mysql
+      MYSQL_URL: jdbc:mysql://mysql:3306/transport_tickets?connectTimeout=3000&socketTimeout=5000&allowPublicKeyRetrieval=true&sslMode=DISABLED
+      MYSQL_USER: tickets
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tickets-local-demo}
+      REDIS_HOST: redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+  mysql:
+    restart: unless-stopped
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: transport_tickets
+      MYSQL_USER: tickets
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tickets-local-demo}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local-demo}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u tickets transport_tickets -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+  redis:
+    restart: unless-stopped
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  mysql-data:

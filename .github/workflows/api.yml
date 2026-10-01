@@ -1,0 +1,26 @@
+name: API checks
+on: [push, pull_request]
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: mvn -B test
+  storage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t transport-tickets-api:local .
+      - run: docker build --target build -t transport-tickets-checks .
+      - run: docker compose up --no-build -d --wait
+      - run: sh scripts/test_storage.sh
+      - run: python3 scripts/test_http.py
+      - if: always()
+        run: docker compose -f compose.yaml -f compose.test.yaml down
