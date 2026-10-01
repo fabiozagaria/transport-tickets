@@ -1,4 +1,4 @@
-# Transport Tickets — modello MVP
+# Transport Tickets — API MVP locale
 
 Progetto didattico indipendente, ispirato al flusso dei trasporti ospedalieri. Non è il codice di TapMyLife e non è un prodotto affiliato. Usare esclusivamente dati fittizi.
 
@@ -22,14 +22,57 @@ Per gli urgenti, le scadenze sono calcolate in 20 minuti dalla creazione per l'a
 
 ## Esecuzione
 
-Richiede JDK 17+ e Maven. Compilare con `mvn compile`.
+Richiede JDK 17+ (incluso `javac`). Le API usano il server HTTP del JDK, senza dipendenze esterne. Compilare con `mvn compile` oppure:
 
-Questa versione contiene il dominio, non un server avviabile. Mancano API, database, login e frontend. L'orario programmato è conservato, ma non applica vincoli finché non viene chiarito se indica prelievo o arrivo.
+```sh
+mkdir -p target/classes
+javac --release 17 -d target/classes $(find src/main/java -name '*.java')
+java -cp target/classes it.fabio.transport.api.TicketApi
+```
+
+Il server ascolta solo su `127.0.0.1:8080`; un'altra porta si passa come argomento. Le richieste POST usano `application/x-www-form-urlencoded`, le risposte sono JSON. Vedi [contratto ed esempi API](docs/api.md).
+
+Il database è in memoria: al riavvio si perdono i ticket. Le credenziali sono demo, senza login reale; questa versione serve per esercitazioni locali con dati fittizi. Mancano database persistente, login e frontend. L'orario programmato è conservato, ma non applica vincoli finché non viene chiarito se indica prelievo o arrivo.
+
+Per eseguire i test HTTP (richiede anche Python 3):
+
+```sh
+python3 scripts/test_api.py
+```
 
 ## Concorrenza e sicurezza da completare
 
-Il chiamante deve fornire identità e orario autorevoli dal server, mai fidarsi dei valori inviati dal frontend. Questa classe non gestisce chiamate concorrenti: il futuro livello di persistenza dovrà usare una transazione con controllo della versione o lock, per far prevalere una sola modifica tra inizio e riassegnazione.
+L'API ricava ruolo e identità da credenziali demo definite sul server e usa `Clock` per l'orario. Le richieste non possono impostare attore, stato o data degli eventi. La CUT vede tutti i ticket, il reparto vede quelli creati dalla propria identità e l'operatore soltanto quelli assegnati a lui. Questa demo non implementa una separazione delle organizzazioni.
+
+L'API serializza modifiche e letture per produrre snapshot coerenti, evitando gare tra inizio e riassegnazione nella singola istanza. La classe di dominio rimane priva di sincronizzazione propria. Il futuro database dovrà usare transazioni e controllo della versione o lock, anche tra più istanze.
 
 ## Fuori dalla prima versione
 
 Ritorni collegati, scanner, modalità di trasporto, integrazioni, notifiche e separazione delle organizzazioni. Per il ritorno è già concordato che lo sblocco manuale richiede l'andata completata.
+
+## Struttura delle responsabilità
+
+- `api/TicketApi`: controller HTTP e avvio del server; legge richieste e invia risposte.
+- `api/TicketPresenter` e `Json`: trasformano i risultati in risposte JSON.
+- `application/TicketService`: coordina creazione, lettura e azioni; verifica ruolo e visibilità senza dipendere da HTTP.
+- `application/CreateTicket`: dati della richiesta di creazione già convertiti in tipi Java.
+- `application/TicketView`: copia immutabile del ticket e dello storico.
+- `application/TicketRepository`: contratto delle operazioni atomiche sull'archivio.
+- `infrastructure/InMemoryTicketRepository`: archivio in memoria con un lock per istanza.
+- `application/DemoDirectory`: identità e reparti della demo.
+- `domain/Ticket`: regole, transizioni, scadenze e storico del trasporto.
+
+Percorso di un'azione: richiesta HTTP → controller → service → repository → `Ticket`.
+Il repository mantiene il lock durante controllo dell'accesso, modifica e copia dei dati.
+Il controller legge il corpo della richiesta e invia la risposta fuori dal lock.
+Il service ricontrolla l'accesso durante la modifica: una riassegnazione potrebbe
+avvenire dopo la prima lettura del controller.
+
+Rimane un lock condiviso fra tutti i ticket della singola istanza. L'interfaccia
+repository richiede che i callback restituiscano dati separati dall'oggetto mutabile;
+il service restituisce esclusivamente `TicketView`. Il lock non implementa rollback
+né coordina più server: la futura persistenza richiederà vere transazioni.
+
+I controlli Java in `src/test/java` verificano il service senza HTTP, inclusa
+l'immutabilità delle copie e la perdita dell'accesso dopo una riassegnazione.
+Lo script Python esegue anche i test HTTP del contratto esistente.
