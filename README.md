@@ -1,7 +1,12 @@
 # Transport Tickets — backend Spring Boot
 
-Progetto didattico indipendente, ispirato ai trasporti ospedalieri. Non affiliato
-a TapMyLife. Usare esclusivamente dati fittizi.
+Progetto personale di studio, nato dall’uso quotidiano di un software per la
+gestione dei trasporti ospedalieri nel mio lavoro. L’obiettivo è provare a
+ricrearne i flussi principali in un’implementazione indipendente, per capire
+come strutturare il codice e approfondire le tecnologie utilizzate.
+
+Il software che utilizzo al lavoro è una fonte di ispirazione funzionale;
+questo progetto non è affiliato a TapMyLife. Usare esclusivamente dati fittizi.
 
 ## Avvio
 
