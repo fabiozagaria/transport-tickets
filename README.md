@@ -2,6 +2,22 @@
 
 Progetto didattico indipendente, ispirato al flusso dei trasporti ospedalieri. Non è il codice di TapMyLife e non è un prodotto affiliato. Usare esclusivamente dati fittizi.
 
+## Versioni del repository
+
+Questo README descrive **`main`: API Java con server HTTP JDK e archivio in memoria**.
+
+Il backend Spring Boot è nel branch [study/backend-jpa-snapshot](https://github.com/fabiozagaria/transport-tickets/tree/study/backend-jpa-snapshot), con [README e istruzioni propri](https://github.com/fabiozagaria/transport-tickets/blob/study/backend-jpa-snapshot/README.md): JPA/MySQL, Flyway, Redis, sessioni, CSRF, ruoli e transazioni con lock.
+
+I comandi, le credenziali demo e i contratti dei due branch sono differenti. Per esplorare la persistenza e la sicurezza usare il branch di studio; non attribuire tali funzionalità alla versione in memoria.
+
+## Scopo
+
+Laboratorio backend per regole di dominio, storico dei trasporti, accesso alle risorse e concorrenza. Il prossimo traguardo del branch di studio è comprendere e verificare il flusso già presente prima di aggiungere frontend o nuove integrazioni.
+
+## Uso dell'AI
+
+Il progetto include codice sviluppato con strumenti AI e viene usato per studio, lettura critica e verifiche pratiche. La presenza di una funzionalità non implica che ogni parte sia già stata consolidata autonomamente.
+
 ## Classi e motivazioni
 
 - `UserRole`: separa reparto, CUT e operatore.
@@ -10,7 +26,7 @@ Progetto didattico indipendente, ispirato al flusso dei trasporti ospedalieri. N
 - `TicketStatus`: insieme degli stati validi; l'enum non controlla da solo le transizioni.
 - `TicketPriority`: separa urgenza e avanzamento del lavoro.
 - `TicketEvent`: storico immutabile dell'attore, dell'azione e dell'operatore assegnato.
-- `Ticket`: dati e comportamento del singolo trasporto. Nessun setter pubblico dello stato: le modifiche passano da azioni esplicite che verificano ruolo, assegnazione e stato. Le regole sono qui per avere un modello verificabile senza Spring; un futuro service orchestrerà accesso, transazioni e persistenza.
+- `Ticket`: dati e comportamento del singolo trasporto. Nessun setter pubblico dello stato: le modifiche passano da azioni esplicite che verificano ruolo, assegnazione e stato. Le regole sono qui per avere un modello verificabile senza Spring; `application/TicketService` orchestra già accesso e azioni tramite il repository; questa versione in memoria non offre transazioni database.
 
 ## Regole implementate
 
