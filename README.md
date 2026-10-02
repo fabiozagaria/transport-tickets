@@ -8,6 +8,14 @@ come strutturare il codice e approfondire le tecnologie utilizzate.
 Il software che utilizzo al lavoro è una fonte di ispirazione funzionale;
 questo progetto non è affiliato a TapMyLife. Usare esclusivamente dati fittizi.
 
+## Stato, ruolo e confine
+
+**Backend di studio nel branch `study/backend-jpa-snapshot`.** Il branch `main` conserva la demo HTTP Java in memoria: i comandi e il contratto di quel README non descrivono questo backend.
+
+Questo ramo approfondisce relazioni JPA, storico, transazioni, concorrenza, autorizzazione e cache. Il prossimo traguardo è comprendere e verificare il comportamento già presente: mapping ticket/eventi, rollback, richieste concorrenti, accesso alla risorsa e fallback Redis. Frontend e nuove integrazioni non fanno parte di questo traguardo.
+
+Il codice è stato sviluppato anche con strumenti AI. La lettura, le prove e le modifiche circoscritte servono a verificarne funzionamento e comprensione, senza attribuire automaticamente autonomia dalla presenza di implementazioni avanzate.
+
 ## Avvio
 
 Con Docker e Compose:
@@ -124,8 +132,9 @@ Una lettura concorrente può osservare lo stato precedente a una modifica, come
 una normale lettura del database; le azioni ricontrollano sempre il dato sotto lock.
 Cache assente, corrotta o indisponibile causa fallback; un guasto MySQL resta bloccante.
 
-Restano paginazione e query mirate per le liste, riduzione delle letture dello storico,
-osservabilità e gestione strutturata dei guasti. La cache è considerata affidabile:
+Paginazione, query mirate per le liste, riduzione delle letture dello storico,
+osservabilità e gestione strutturata dei guasti sono possibili evoluzioni successive,
+da scegliere dopo il consolidamento del flusso attuale. La cache è considerata affidabile:
 un payload valido alterato con lo stesso ID e revisione non viene confrontato
 integralmente con MySQL. L'importazione carica l'archivio in memoria: per archivi
 grandi servirà una migrazione a blocchi progettata con la stessa atomicità.
