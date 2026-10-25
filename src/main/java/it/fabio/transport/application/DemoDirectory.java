@@ -4,14 +4,14 @@ import it.fabio.transport.domain.*;
 import java.util.*;
 
 /** Fixed demo identities and catalogue. Not a production authentication system. */
-public final class DemoDirectory {
+public final class DemoDirectory implements TransportDirectory {
     private final Map<String, User> identities;
     private final Map<UUID, User> users;
     private final Map<UUID, Department> departments;
 
     public DemoDirectory() {
         var identities = new LinkedHashMap<String, User>();
-        identities.put("department-demo", new User(new UUID(0, 1), "department-demo", UserRole.DEPARTMENT));
+        identities.put("department-demo", new User(new UUID(0, 1), "department-demo", UserRole.DEPARTMENT, new UUID(0, 1)));
         identities.put("cut-demo", new User(new UUID(0, 2), "cut-demo", UserRole.CUT));
         identities.put("operator-demo", new User(new UUID(0, 3), "operator-demo", UserRole.OPERATOR));
         identities.put("operator2-demo", new User(new UUID(0, 4), "operator2-demo", UserRole.OPERATOR));

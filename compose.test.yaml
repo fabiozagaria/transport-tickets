@@ -1,0 +1,27 @@
+services:
+  mysql-test:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: tickets_test
+      MYSQL_USER: tickets
+      MYSQL_PASSWORD: tickets-test-only
+      MYSQL_ROOT_PASSWORD: root-test-only
+    tmpfs: [/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 5s
+      retries: 40
+  checks:
+    image: transport-tickets-checks
+    entrypoint: ["java", "-cp", "/build/target/classes:/build/target/test-classes:/build/target/dependency/*", "it.fabio.transport.infrastructure.JpaPersistenceCheck"]
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql-test:3306/tickets_test?connectTimeout=3000&socketTimeout=5000&allowPublicKeyRetrieval=true&sslMode=DISABLED
+      MYSQL_USER: tickets
+      MYSQL_PASSWORD: tickets-test-only
+      REDIS_HOST: redis
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

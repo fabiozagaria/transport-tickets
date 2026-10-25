@@ -7,10 +7,10 @@ import java.util.*;
 /** Coordinates use cases and access checks independently of HTTP. */
 public final class TicketService {
     private final TicketRepository repository;
-    private final DemoDirectory directory;
+    private final TransportDirectory directory;
     private final Clock clock;
 
-    public TicketService(TicketRepository repository, DemoDirectory directory, Clock clock) {
+    public TicketService(TicketRepository repository, TransportDirectory directory, Clock clock) {
         this.repository = Objects.requireNonNull(repository);
         this.directory = Objects.requireNonNull(directory);
         this.clock = Objects.requireNonNull(clock);
@@ -18,6 +18,8 @@ public final class TicketService {
 
     public TicketView create(User actor, CreateTicket command) {
         requireRole(actor, UserRole.DEPARTMENT);
+        if (actor.departmentId() == null || !actor.departmentId().equals(command.originId()))
+            throw new ApplicationFailure(ApplicationFailure.Kind.FORBIDDEN, "Reparto di origine non autorizzato");
         return repository.add(new Ticket(UUID.randomUUID(), command.patientCode(),
                 directory.department(command.originId()), directory.department(command.destinationId()),
                 actor, command.priority(), clock.instant(), command.scheduledAt()));
@@ -28,7 +30,7 @@ public final class TicketService {
     }
 
     public TicketView get(User actor, UUID id) {
-        return repository.withTicket(id, t -> {
+        return repository.readTicket(id, t -> {
             requireVisible(actor, t);
             return TicketView.from(t);
         }).orElseThrow(TicketService::notFound);
@@ -55,7 +57,7 @@ public final class TicketService {
 
     private static boolean visible(User actor, Ticket ticket) {
         return actor.role() == UserRole.CUT
-                || (actor.role() == UserRole.DEPARTMENT && actor.id().equals(ticket.getCreatedBy().id()))
+                || (actor.role() == UserRole.DEPARTMENT && actor.departmentId() != null && actor.departmentId().equals(ticket.getOrigin().id()))
                 || (actor.role() == UserRole.OPERATOR && ticket.getAssignedOperator() != null
                     && actor.id().equals(ticket.getAssignedOperator().id()));
     }
