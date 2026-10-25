@@ -1,23 +1,41 @@
-# API locale dei ticket
+# API e sessioni
 
-Tutti gli endpoint richiedono `Authorization: Bearer <credenziale-demo>`.
-Le credenziali pubbliche qui sotto servono esclusivamente per la demo locale.
-Ruoli e ID vengono risolti sul server; non vengono accettati dal corpo delle richieste.
+Il backend usa Spring Security con sessioni. Le credenziali Bearer demo precedenti
+non funzionano più. Conservare il cookie `JSESSIONID` fra le richieste.
 
-| Credenziale | Ruolo | ID utente |
-| --- | --- | --- |
-| `department-demo` | DEPARTMENT | `00000000-0000-0000-0000-000000000001` |
-| `cut-demo` | CUT | `00000000-0000-0000-0000-000000000002` |
-| `operator-demo` | OPERATOR | `00000000-0000-0000-0000-000000000003` |
-| `operator2-demo` | OPERATOR | `00000000-0000-0000-0000-000000000004` |
+## Login con curl
 
-I reparti demo sono `00000000-0000-0000-0000-000000000001` (Reparto demo)
-e `00000000-0000-0000-0000-000000000002` (Radiologia demo).
+Richiede Python 3 per estrarre il token JSON:
+
+```sh
+CSRF=$(curl -sS -c /tmp/tickets-cookies http://127.0.0.1:8080/api/auth/csrf |
+  python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
+curl -sS -b /tmp/tickets-cookies -c /tmp/tickets-cookies \
+  -H "X-CSRF-TOKEN: $CSRF" \
+  --data-urlencode 'username=department-demo' \
+  --data-urlencode 'password=local-demo-change-me' \
+  http://127.0.0.1:8080/api/auth/login
+CSRF=$(curl -sS -b /tmp/tickets-cookies -c /tmp/tickets-cookies \
+  http://127.0.0.1:8080/api/auth/csrf |
+  python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
+curl -sS -b /tmp/tickets-cookies -H "X-CSRF-TOKEN: $CSRF" \
+  --data-urlencode 'patientCode=FAKE-001' \
+  -d 'originId=00000000-0000-0000-0000-000000000001' \
+  -d 'destinationId=00000000-0000-0000-0000-000000000002' \
+  -d 'priority=URGENT' http://127.0.0.1:8080/api/tickets
+```
+
+Per logout usare POST `/api/auth/logout` con cookie e token. Ogni utente ha una
+sessione propria; usare un diverso cookie jar per CUT e operatori.
+`GET /api/auth/me` restituisce ID, username, ruolo e reparto, senza password/hash.
+Il token CSRF è accettato nell'header, non come campo del form.
+
+## Endpoint ticket
 
 | Metodo | Endpoint | Corpo form / risultato |
 | --- | --- | --- |
-| GET | `/api/departments` | Elenco reparti |
-| GET | `/api/operators` | Elenco operatori, riservato alla CUT |
+| GET | `/api/departments` | Reparti, richiede login |
+| GET | `/api/operators` | Operatori attivi, riservato alla CUT |
 | POST | `/api/tickets` | `patientCode`, `originId`, `destinationId`, `priority`; opzionale `scheduledAt` |
 | GET | `/api/tickets` | Ticket visibili all'utente |
 | GET | `/api/tickets/{id}` | Ticket, storico e scadenze |
@@ -29,61 +47,40 @@ e `00000000-0000-0000-0000-000000000002` (Radiologia demo).
 | POST | `/api/tickets/{id}/arrive` | Vuoto; operatore assegnato |
 | POST | `/api/tickets/{id}/complete` | Vuoto; operatore assegnato |
 
-`priority` accetta `NORMAL` o `URGENT`. `scheduledAt` è un istante ISO-8601 con
-fuso, ad esempio `2027-01-01T10:00:00Z`, non precedente alla creazione.
-Le risposte ticket comprendono ID, codice paziente fittizio, ID dei reparti,
-creatore, operatore, priorità, stato, orari, scadenze e storico degli eventi.
-I campi non ancora disponibili sono `null`. I campi sconosciuti o duplicati
-sono respinti e il corpo è limitato a 8 KiB.
+POST con dati usa `application/x-www-form-urlencoded`. Il corpo dei ticket ha
+limite 8 KiB; campi sconosciuti e duplicati vengono respinti. `priority` accetta
+`NORMAL` o `URGENT`; `scheduledAt` è un istante ISO-8601 non precedente alla creazione.
+Il reparto può creare soltanto con origine uguale al proprio reparto e leggere
+anche i ticket creati dai colleghi con quella stessa origine.
 
-## Esempio
+Account demo, solo quando il bootstrap è abilitato:
 
-Creare un ticket:
+| Username | Ruolo | ID utente | Reparto |
+| --- | --- | --- | --- |
+| department-demo | DEPARTMENT | UUID con suffisso 001 | Reparto demo, UUID con suffisso 001 |
+| department2-demo | DEPARTMENT | UUID con suffisso 005 | Reparto demo |
+| radiology-demo | DEPARTMENT | UUID con suffisso 006 | Radiologia demo, UUID con suffisso 002 |
+| cut-demo | CUT | UUID con suffisso 002 | Nessuno |
+| operator-demo | OPERATOR | UUID con suffisso 003 | Nessuno |
+| operator2-demo | OPERATOR | UUID con suffisso 004 | Nessuno |
 
-```sh
-curl -i http://127.0.0.1:8080/api/tickets \
-  -H 'Authorization: Bearer department-demo' \
-  --data-urlencode 'patientCode=FAKE-001' \
-  -d 'originId=00000000-0000-0000-0000-000000000001' \
-  -d 'destinationId=00000000-0000-0000-0000-000000000002' \
-  -d 'priority=URGENT'
-```
-
-La risposta è `201 Created` con `Location` e ticket JSON. Copiare il suo `id`:
-
-```sh
-TICKET_ID='inserire-id-della-risposta'
-curl "http://127.0.0.1:8080/api/tickets/$TICKET_ID/assign" \
-  -H 'Authorization: Bearer cut-demo' \
-  -d 'operatorId=00000000-0000-0000-0000-000000000003'
-
-curl "http://127.0.0.1:8080/api/tickets/$TICKET_ID/accept" \
-  -H 'Authorization: Bearer operator-demo' -X POST
-curl "http://127.0.0.1:8080/api/tickets/$TICKET_ID/start" \
-  -H 'Authorization: Bearer operator-demo' -X POST
-curl "http://127.0.0.1:8080/api/tickets/$TICKET_ID/identify" \
-  -H 'Authorization: Bearer operator-demo' --data-urlencode 'patientCode=FAKE-001'
-
-for action in depart arrive complete; do
-  curl "http://127.0.0.1:8080/api/tickets/$TICKET_ID/$action" \
-    -H 'Authorization: Bearer operator-demo' -X POST
-done
-```
+Il prefisso degli UUID demo è `00000000-0000-0000-0000-000000000`.
 
 ## Errori
 
-Formato: `{"error":"descrizione"}`. Una richiesta respinta non aggiunge eventi.
-
-| Stato HTTP | Significato |
+| HTTP | Significato |
 | --- | --- |
-| 400 | Campi, UUID, priorità, orario o codice paziente non validi |
-| 401 | Credenziale assente o sconosciuta |
-| 403 | Ruolo non autorizzato |
-| 404 | Endpoint, ticket inesistente o ticket non visibile |
-| 405 | Metodo non consentito, con header `Allow` |
-| 409 | Transizione non consentita o riassegnazione dopo l'inizio |
+| 400 | Dati, UUID, priorità, orario o codice paziente non validi |
+| 401 | Login richiesto, credenziali errate o sessione revocata |
+| 403 | Ruolo/reparto vietato oppure CSRF mancante o non valido |
+| 404 | Endpoint o ticket inesistente/non visibile |
+| 405 | Metodo non consentito |
+| 409 | Transizione vietata o riassegnazione dopo l'inizio |
 | 413 | Corpo oltre 8 KiB |
-| 415 | Corpo non vuoto con formato diverso da form URL-encoded |
+| 415 | Formato diverso dal form URL-encoded |
+| 500 | Dati persistiti corrotti o errore di serializzazione |
+| 503 | Archivio ticket/utenti indisponibile |
 
-Il codice paziente compare solo nelle risposte autorizzate; le risposte hanno
-`Cache-Control: no-store`. Le credenziali demo non sono adatte a un servizio pubblico.
+Gli errori applicativi usano `{"error":"..."}`, le risposte del livello sicurezza
+usano `{"message":"..."}`. Una richiesta mutante senza token CSRF può ricevere
+403 anche se manca l'autenticazione, perché il filtro CSRF la respinge prima.

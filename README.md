@@ -1,94 +1,178 @@
-# Transport Tickets — API MVP locale
+# Transport Tickets — backend Spring Boot
 
-Progetto didattico indipendente, ispirato al flusso dei trasporti ospedalieri. Non è il codice di TapMyLife e non è un prodotto affiliato. Usare esclusivamente dati fittizi.
+Progetto personale di studio, nato dall’uso quotidiano di un software per la
+gestione dei trasporti ospedalieri nel mio lavoro. L’obiettivo è provare a
+ricrearne i flussi principali in un’implementazione indipendente, per capire
+come strutturare il codice e approfondire le tecnologie utilizzate.
 
-## Versioni del repository
+Il software che utilizzo al lavoro è una fonte di ispirazione funzionale;
+questo progetto non è affiliato a TapMyLife. Usare esclusivamente dati fittizi.
 
-Questo README descrive **`main`: API Java con server HTTP JDK e archivio in memoria**.
+## Stato, ruolo e confine
 
-Il backend Spring Boot è nel branch [study/backend-jpa-snapshot](https://github.com/fabiozagaria/transport-tickets/tree/study/backend-jpa-snapshot), con [README e istruzioni propri](https://github.com/fabiozagaria/transport-tickets/blob/study/backend-jpa-snapshot/README.md): JPA/MySQL, Flyway, Redis, sessioni, CSRF, ruoli e transazioni con lock.
+**Backend di studio Spring Boot sul branch `main`.** Il ramo `study/backend-jpa-snapshot` è stato integrato nel principale. La precedente [demo HTTP Java in memoria](https://github.com/fabiozagaria/transport-tickets/tree/60902dcc695eb0cae493231e5ba6fda7438fca15) resta consultabile nella cronologia Git.
 
-I comandi, le credenziali demo e i contratti dei due branch sono differenti. Per esplorare la persistenza e la sicurezza usare il branch di studio; non attribuire tali funzionalità alla versione in memoria.
+Il backend approfondisce relazioni JPA, storico, transazioni, concorrenza, autorizzazione e cache. Il prossimo traguardo è comprendere e verificare il comportamento già presente: mapping ticket/eventi, rollback, richieste concorrenti, accesso alla risorsa e fallback Redis. Frontend e nuove integrazioni non fanno parte di questo traguardo.
 
-## Scopo
+Il codice è stato sviluppato anche con strumenti AI. La lettura, le prove e le modifiche circoscritte servono a verificarne funzionamento e comprensione, senza attribuire automaticamente autonomia dalla presenza di implementazioni avanzate.
 
-Laboratorio backend per regole di dominio, storico dei trasporti, accesso alle risorse e concorrenza. Il prossimo traguardo del branch di studio è comprendere e verificare il flusso già presente prima di aggiungere frontend o nuove integrazioni.
+## Avvio
 
-## Uso dell'AI
-
-Il progetto include codice sviluppato con strumenti AI e viene usato per studio, lettura critica e verifiche pratiche. La presenza di una funzionalità non implica che ogni parte sia già stata consolidata autonomamente.
-
-## Classi e motivazioni
-
-- `UserRole`: separa reparto, CUT e operatore.
-- `User`: identità e ruolo, senza password. Autenticazione e hash delle password saranno aggiunti nel livello di sicurezza.
-- `Department`: identifica origine e destinazione evitando stringhe libere ripetute. È un record immutabile.
-- `TicketStatus`: insieme degli stati validi; l'enum non controlla da solo le transizioni.
-- `TicketPriority`: separa urgenza e avanzamento del lavoro.
-- `TicketEvent`: storico immutabile dell'attore, dell'azione e dell'operatore assegnato.
-- `Ticket`: dati e comportamento del singolo trasporto. Nessun setter pubblico dello stato: le modifiche passano da azioni esplicite che verificano ruolo, assegnazione e stato. Le regole sono qui per avere un modello verificabile senza Spring; `application/TicketService` orchestra già accesso e azioni tramite il repository; questa versione in memoria non offre transazioni database.
-
-## Regole implementate
-
-Il reparto crea; la CUT assegna o riassegna prima dell'inizio. La riassegnazione richiede una nuova accettazione e conserva la prima assegnazione. Solo l'operatore assegnato avanza il ticket. Il codice paziente errato non modifica lo stato. Più ticket possono essere accettati e iniziati: ogni ticket è indipendente.
-
-Percorso: UNASSIGNED → ASSIGNED → ACCEPTED → STARTED → PATIENT_IDENTIFIED → IN_TRANSIT → ARRIVED → COMPLETED.
-
-Per gli urgenti, le scadenze sono calcolate in 20 minuti dalla creazione per l'assegnazione e 20 minuti dalla prima assegnazione per il completamento. Questa è un'ipotesi didattica da verificare, non una regola ufficiale. Il ritardo non blocca l'esecuzione.
-
-## Esecuzione
-
-Richiede JDK 17+ (incluso `javac`). Le API usano il server HTTP del JDK, senza dipendenze esterne. Compilare con `mvn compile` oppure:
+Con Docker e Compose:
 
 ```sh
-mkdir -p target/classes
-javac --release 17 -d target/classes $(find src/main/java -name '*.java')
-java -cp target/classes it.fabio.transport.api.TicketApi
+docker compose up --build -d
+docker compose logs api
+docker compose down
 ```
 
-Il server ascolta solo su `127.0.0.1:8080`; un'altra porta si passa come argomento. Le richieste POST usano `application/x-www-form-urlencoded`, le risposte sono JSON. Vedi [contratto ed esempi API](docs/api.md).
+L'API è disponibile su `http://127.0.0.1:8080`. Compose avvia MySQL 8.4 e Redis 7.4;
+solo la porta dell'API viene pubblicata, sul computer locale. MySQL conserva i dati
+nel volume `mysql-data`. Non usare `docker compose down -v` se vuoi conservarli.
 
-Il database è in memoria: al riavvio si perdono i ticket. Le credenziali sono demo, senza login reale; questa versione serve per esercitazioni locali con dati fittizi. Mancano database persistente, login e frontend. L'orario programmato è conservato, ma non applica vincoli finché non viene chiarito se indica prelievo o arrivo.
+Compose abilita esplicitamente gli account demo, creati in MySQL solo se assenti:
+`department-demo`, `department2-demo`, `radiology-demo`, `cut-demo`, `operator-demo`
+e `operator2-demo`. Password locale: `local-demo-change-me`. Sostituirla tramite
+`DEMO_PASSWORD` nel file `.env` ignorato da Git. Modificare questa variabile non
+resetta le password di account già esistenti.
 
-Per eseguire i test HTTP (richiede anche Python 3):
+Fuori da Compose il bootstrap demo è disabilitato. Servono `MYSQL_URL`,
+`MYSQL_USER`, `MYSQL_PASSWORD` e account provisionati in MySQL; non esiste ancora
+una schermata o API di amministrazione utenti. L'avvio richiede Java 17+ e Maven:
 
 ```sh
-python3 scripts/test_api.py
+mvn package
+java -jar target/transport-tickets-0.1.0-SNAPSHOT.jar
 ```
 
-## Concorrenza e sicurezza da completare
+## Autenticazione
 
-L'API ricava ruolo e identità da credenziali demo definite sul server e usa `Clock` per l'orario. Le richieste non possono impostare attore, stato o data degli eventi. La CUT vede tutti i ticket, il reparto vede quelli creati dalla propria identità e l'operatore soltanto quelli assegnati a lui. Questa demo non implementa una separazione delle organizzazioni.
+Spring Security usa sessioni server, login e logout. Le vecchie credenziali
+`Authorization: Bearer ...` non sono più accettate. Le password sono salvate con
+hash BCrypt; i dati dell'account contengono ruolo, stato attivo e reparto.
+Vedi [contratto API e login](docs/api.md).
 
-L'API serializza modifiche e letture per produrre snapshot coerenti, evitando gare tra inizio e riassegnazione nella singola istanza. La classe di dominio rimane priva di sincronizzazione propria. Il futuro database dovrà usare transazioni e controllo della versione o lock, anche tra più istanze.
+Richiedere `GET /api/auth/csrf`, conservare il cookie di sessione e inviare il token
+nell'header `X-CSRF-TOKEN` per ogni POST, incluso login e logout. Dopo il login
+richiedere un nuovo token: Spring ruota l'ID di sessione e invalida il token precedente.
+La sessione scade dopo 30 minuti di inattività. Il cookie è HttpOnly e SameSite=Strict;
+con HTTPS configurare `SESSION_COOKIE_SECURE=true`.
 
-## Fuori dalla prima versione
+Gli account vengono ricontrollati a ogni richiesta autenticata. Disabilitazione,
+modifica password, ruolo o reparto invalidano la sessione alla richiesta successiva.
+Le sessioni sono locali alla singola API, perse al riavvio e non condivise tramite
+Redis: per più istanze servirà gestione distribuita delle sessioni o affinità del traffico.
 
-Ritorni collegati, scanner, modalità di trasporto, integrazioni, notifiche e separazione delle organizzazioni. Per il ritorno è già concordato che lo sblocco manuale richiede l'andata completata.
+## Regole e responsabilità
 
-## Struttura delle responsabilità
+Percorso: UNASSIGNED → ASSIGNED → ACCEPTED → STARTED → PATIENT_IDENTIFIED →
+IN_TRANSIT → ARRIVED → COMPLETED.
 
-- `api/TicketApi`: controller HTTP e avvio del server; legge richieste e invia risposte.
-- `api/TicketPresenter` e `Json`: trasformano i risultati in risposte JSON.
-- `application/TicketService`: coordina creazione, lettura e azioni; verifica ruolo e visibilità senza dipendere da HTTP.
-- `application/CreateTicket`: dati della richiesta di creazione già convertiti in tipi Java.
-- `application/TicketView`: copia immutabile del ticket e dello storico.
-- `application/TicketRepository`: contratto delle operazioni atomiche sull'archivio.
-- `infrastructure/InMemoryTicketRepository`: archivio in memoria con un lock per istanza.
-- `application/DemoDirectory`: identità e reparti della demo.
-- `domain/Ticket`: regole, transizioni, scadenze e storico del trasporto.
+Il reparto crea soltanto con origine uguale al proprio reparto e vede i ticket
+con quell'origine, anche creati da colleghi. La CUT vede tutti i ticket e assegna
+o riassegna prima dell'inizio. Solo l'operatore assegnato avanza il ticket.
+Una riassegnazione richiede nuova accettazione e conserva la prima assegnazione.
+Il codice paziente errato non modifica stato o storico.
 
-Percorso di un'azione: richiesta HTTP → controller → service → repository → `Ticket`.
-Il repository mantiene il lock durante controllo dell'accesso, modifica e copia dei dati.
-Il controller legge il corpo della richiesta e invia la risposta fuori dal lock.
-Il service ricontrolla l'accesso durante la modifica: una riassegnazione potrebbe
-avvenire dopo la prima lettura del controller.
+- `TransportApplication`: avvio Spring Boot.
+- `api/TicketController`, `AuthController`, `ApiErrors`: HTTP e rappresentazioni.
+- `security/SecurityConfiguration`: autenticazione, sessioni, CSRF e ruoli degli endpoint.
+- `application/TicketService`: accesso al singolo ticket e coordinamento delle operazioni.
+- `application/TransportDirectory`: catalogo utenti e reparti, indipendente da HTTP.
+- `infrastructure/jpa/JpaUserDirectory`: account persistenti e reparti; bootstrap demo opzionale.
+- `domain/Ticket`: transizioni, scadenze e storico.
+- `application/TicketView`: snapshot immutabile.
+- `infrastructure/jpa/JpaTicketRepository`: transazioni JPA e lock sulle righe.
+- `infrastructure/RedisTicketCache`: cache opzionale delle letture singole.
 
-Rimane un lock condiviso fra tutti i ticket della singola istanza. L'interfaccia
-repository richiede che i callback restituiscano dati separati dall'oggetto mutabile;
-il service restituisce esclusivamente `TicketView`. Il lock non implementa rollback
-né coordina più server: la futura persistenza richiederà vere transazioni.
+Spring Security controlla il ruolo; il service ricontrolla accesso e assegnazione
+nella stessa transazione della modifica. Il dominio resta indipendente da Spring.
+L'orario degli eventi e gli ID sono generati dal server. La programmazione è
+conservata ma non vincola il trasporto. Per URGENT le scadenze sono 20 minuti dalla
+creazione per assegnare e 20 dalla prima assegnazione per completare: ipotesi
+ didattica da verificare. Il ritardo non blocca il flusso.
 
-I controlli Java in `src/test/java` verificano il service senza HTTP, inclusa
-l'immutabilità delle copie e la perdita dell'accesso dopo una riassegnazione.
-Lo script Python esegue anche i test HTTP del contratto esistente.
+Vedi anche [spiegazione degli approcci JPA](docs/jpa.md).
+
+## Persistenza e cache
+
+JPA/Hibernate salva i ticket in `ticket_records` e gli eventi ordinati in
+`ticket_events`. Le entità sono separate dal dominio: il mapper ricostruisce il
+ticket applicando e verificando le transizioni. Nomi storici di reparti, creatore
+e operatore corrente sono snapshot; gli eventi conservano gli ID degli attori.
+Secondi e nanosecondi sono colonne separate per preservare esattamente gli `Instant`.
+
+Flyway applica migrazioni versionate; Hibernate verifica lo schema senza modificarlo.
+Su un database esistente, la baseline 0 consente di partire dalle tabelle JDBC.
+La migrazione V3 legge i payload v1/v2/v3, verifica lo storico e importa tutti i
+ticket in una transazione. Un payload corrotto interrompe l'importazione e annulla
+le righe importate. MySQL non annulla il DDL delle migrazioni precedenti: lo schema
+può quindi esistere anche dopo un errore. Correggere la causa prima di eseguire un
+`repair` Flyway controllato e riprovare; l'applicazione non ripara automaticamente.
+Il vecchio `tickets` viene rinominato `legacy_tickets_archive`: nessun repository
+dell’applicazione scrive nell’archivio. Il suo contenuto rimane disponibile per verifiche.
+La versione originale è conservata in `legacy_version`; la revisione JPA parte da 0.
+
+Per aggiornare un'installazione esistente: fare un backup del database, fermare
+tutte le vecchie API (`docker compose stop api`), costruire e avviare la nuova API.
+È una migrazione con fermo: non mescolare istanze JDBC e JPA. Tornare alla versione
+precedente richiede ripristinare il backup, perché l'archivio non riceve nuove modifiche.
+
+Le modifiche usano un lock pessimista sul singolo ticket, con controllo accessi,
+transizione e aggiunta degli eventi nella stessa transazione. `@Version` aggiunge
+il controllo della revisione. Errori del callback annullano stato e storico.
+Hikari gestisce un pool di massimo 10 connessioni; Open Session in View è disabilitato.
+
+La cache usa `tickets:jpa:v1:<id>:<revision>`, con TTL 300 secondi. Le letture
+controllano prima la revisione in MySQL; una cache vecchia diventa irraggiungibile
+senza cancellazioni esplicite. Il valore contiene anche la revisione e l'ID viene
+verificato. Redis viene consultato fuori dalle transazioni e dai lock del database.
+Su un miss, ticket e storico sono letti nello stesso snapshot REPEATABLE READ.
+Una lettura concorrente può osservare lo stato precedente a una modifica, come
+una normale lettura del database; le azioni ricontrollano sempre il dato sotto lock.
+Cache assente, corrotta o indisponibile causa fallback; un guasto MySQL resta bloccante.
+
+Paginazione, query mirate per le liste, riduzione delle letture dello storico,
+osservabilità e gestione strutturata dei guasti sono possibili evoluzioni successive,
+da scegliere dopo il consolidamento del flusso attuale. La cache è considerata affidabile:
+un payload valido alterato con lo stesso ID e revisione non viene confrontato
+integralmente con MySQL. L'importazione carica l'archivio in memoria: per archivi
+grandi servirà una migrazione a blocchi progettata con la stessa atomicità.
+
+## Configurazione e dipendenze
+
+- `MYSQL_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`: connessione di ticket e account.
+- `TICKET_STORAGE`: `mysql` predefinito, oppure `memory` per ticket temporanei; gli account restano in MySQL.
+- `REDIS_HOST`, `REDIS_PORT`: cache opzionale, porta predefinita 6379.
+- `DEMO_USERS_ENABLED`, `DEMO_PASSWORD`: bootstrap demo esplicito.
+- `BIND_ADDRESS`, `PORT`: predefiniti `127.0.0.1` e 8080; Docker ascolta su `0.0.0.0`.
+
+Spring Web sostituisce il server HTTP JDK. Spring Security gestisce password,
+autenticazione, sessioni e CSRF. Spring Test e Security Test verificano controller
+e filtri. Spring Data JPA fornisce repository e transazioni; Hibernate esegue il
+mapping relazionale e Hikari riusa le connessioni. Flyway Core e il modulo MySQL
+rendono lo schema e l'importazione ripetibili e verificabili. Il driver MySQL
+resta necessario per la connessione. Non viene aggiunto H2: i test storage usano MySQL reale.
+
+Docker usa una build Maven/JDK e un runtime JRE, con processo non root. MySQL usa
+credenziali demo e connessione senza TLS nella rete interna locale; Redis non ha
+ancora autenticazione o TLS. Il backend non separa organizzazioni e non ha ancora
+limitazione dei tentativi di login o recupero password.
+
+## Test
+
+```sh
+mvn test
+docker compose up --build -d
+python3 scripts/test_http.py
+docker build --target build -t transport-tickets-checks .
+sh scripts/test_storage.sh
+```
+
+JUnit verifica login, CSRF, logout, sessione invalidata, ruoli, appartenenza al
+reparto, ciclo completo, riassegnazione, errori dell'archivio e regressioni del codec.
+I test HTTP reali usano le sessioni e gli account MySQL del container.
+I test storage usano un MySQL temporaneo separato dai dati dell’app e verificano
+importazione, rollback su archivio corrotto, precisione dei tempi, conservazione dell’archivio,
+riavvio/idempotenza, BCrypt e utenti persistenti, rollback, cache, ciclo,
+doppia accettazione e gara inizio/riassegnazione forzando entrambi gli ordini.

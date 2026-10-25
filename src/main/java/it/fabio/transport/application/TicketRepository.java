@@ -10,5 +10,8 @@ import java.util.function.Function;
 public interface TicketRepository {
     TicketView add(Ticket ticket);
     <T> Optional<T> withTicket(UUID id, Function<Ticket, T> operation);
+    default <T> Optional<T> readTicket(UUID id, Function<Ticket, T> snapshot) {
+        return withTicket(id, snapshot);
+    }
     <T> List<T> readAll(Function<Ticket, T> snapshot);
 }
